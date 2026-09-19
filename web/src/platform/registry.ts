@@ -32,7 +32,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '2D',
     mood: 'focus',
     effort: 2,
-    accent: '#b5179e'
+    accent: '#b5179e',
+    load: () => import('../games/block-drop/index')
   },
   {
     id: 'arena-shooter',
