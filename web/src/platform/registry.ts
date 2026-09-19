@@ -81,7 +81,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '3D',
     mood: 'quick hit',
     effort: 2,
-    accent: '#a78bfa'
+    accent: '#a78bfa',
+    load: () => import('../games/stack-tower/index')
   },
   {
     id: 'platformer-3d',
