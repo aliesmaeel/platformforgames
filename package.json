@@ -1,0 +1,14 @@
+{
+  "name": "platformforgames",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["web", "server"],
+  "scripts": {
+    "dev": "npm run dev --workspace=server & npm run dev --workspace=web",
+    "dev:web": "npm run dev --workspace=web",
+    "dev:server": "npm run dev --workspace=server",
+    "build": "npm run build --workspace=web",
+    "preview": "npm run preview --workspace=web"
+  }
+}

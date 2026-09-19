@@ -1,0 +1,10 @@
+{
+  "name": "@pfg/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --no-warnings src/index.js",
+    "start": "node --no-warnings src/index.js"
+  }
+}
