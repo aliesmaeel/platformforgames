@@ -75,6 +75,8 @@ const scoreShot = () => {
 };
 let ev = scoreShot();
 assert.ok(ev.some((e) => e.type === 'nogoal'), 'straight from kick-off does not count');
+const inIdx = ev.findIndex((e) => e.type === 'ballIn');
+assert.ok(inIdx >= 0 && inIdx < ev.findIndex((e) => e.type === 'nogoal'), 'ballIn fires before the sim settles');
 assert.deepEqual(m.score, [0, 0]);
 ev = m.resume();
 assert.ok(ev.some((e) => e.type === 'turn' && e.team === 1), 'other side kicks off');
@@ -98,6 +100,26 @@ c.tick(5);
 assert.ok(c.clocks[1] < R.TIME && c.clocks[0] === R.TIME);
 const evc = c.tick(R.TIME);
 assert.ok(evc.some((e) => e.type === 'over' && e.winner === 0 && e.why === 'time'));
+// determinism: the same shot replays to the same positions, digit for digit
+const replay = () => { const x = new R.Match('pvp'); x.begin(0); x.kickoffPending = false; const d0 = x.world.bodies[3]; x.shoot(d0, 1234.5, -321.25); for (let i = 0; i < 3000 && x.state === 'sim'; i++) x.tick(1 / 60); return JSON.stringify(x.snapshot()); };
+assert.equal(replay(), replay());
+
+// online: snapshots round-trip and the remote side can end the match on time
+const host = new R.Match('online', 0);
+const guest = new R.Match('online', 1);
+host.begin(1);
+guest.begin(1);
+assert.ok(!host.isHuman(1) && guest.isHuman(1), 'only the guest flicks red');
+host.world.bodies[7].x += 33;
+host.clocks[1] = 100;
+guest.adopt(host.snapshot());
+assert.equal(guest.world.bodies[7].x, host.world.bodies[7].x);
+assert.equal(guest.clocks[1], 100);
+const to = guest.timeout(0);
+assert.ok(to.some((e) => e.type === 'over' && e.winner === 1 && e.why === 'time'));
+assert.equal(guest.winner, 1);
+assert.ok(R.matchScore(guest) >= 1000, 'the guest scores its own win');
+
 assert.equal(R.fmtClock(179.2), '3:00');
 assert.equal(R.fmtClock(29.5), '0:30');
 

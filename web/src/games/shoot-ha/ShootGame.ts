@@ -43,6 +43,10 @@ const CSS = `
 .sh__btns button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:999px;padding:10px 18px;cursor:pointer;background:#ffd23f;color:#1b1500;box-shadow:0 3px 0 #a88400}
 .sh__btns button.alt{background:#e8f3e5;color:#0e3616;box-shadow:0 3px 0 #97ad93}
 .sh__btns button:active{transform:translateY(2px);box-shadow:none}
+.sh__btns input{font:inherit;font-family:ui-monospace,monospace;font-weight:700;font-size:16px;width:92px;text-align:center;text-transform:uppercase;letter-spacing:.15em;border:2px solid #1f5a2a;border-radius:999px;background:#050d06;color:#c8ff3d;padding:8px 10px}
+.sh__online{margin:16px 0 8px!important;font-size:13px;color:#9bb898!important}
+.sh__net{min-height:1.2em;font-family:ui-monospace,monospace;font-size:13px;color:#ffd23f!important;margin:10px 0 0!important}
+.sh__net .code{font-size:26px;letter-spacing:.2em;color:#c8ff3d;display:block;margin-top:2px}
 `;
 
 let cssInjected = false;
@@ -73,6 +77,10 @@ export class ShootGame implements GameHandle {
   match: R.Match | null = null;
   names = ['You', 'Computer'];
   submitted = false;
+  ws: WebSocket | null = null;
+  side = 0;
+  code: string | null = null;
+  private pendingRematch = false;
 
   constructor(private container: HTMLElement, private ctx: GameContext) {
     if (!cssInjected) {
@@ -105,6 +113,9 @@ export class ShootGame implements GameHandle {
               <li>Matches against the computer count for the leaderboard.</li>
             </ul>
             <div class="sh__btns"><button data-el="bAI">Play the computer</button><button class="alt" data-el="bPVP">Two players, one device</button></div>
+            <p class="sh__online">Or play a friend on another computer</p>
+            <div class="sh__btns"><button class="alt" data-el="bHost">Host a match</button><input data-el="code" placeholder="CODE" maxlength="4" autocapitalize="characters" /><button class="alt" data-el="bJoin">Join</button></div>
+            <p class="sh__net" data-el="net"></p>
           </div>
         </div>
         <div class="sh__overlay" data-el="over" hidden>
@@ -121,11 +132,13 @@ export class ShootGame implements GameHandle {
     this.el.bAI.onclick = () => this.startMatch('ai');
     this.el.bPVP.onclick = () => this.startMatch('pvp');
     this.el.bAgain.onclick = () => this.match && this.startMatch(this.match.mode);
-    this.el.bMenu.onclick = () => {
-      this.el.over.hidden = true;
-      this.el.menu.hidden = false;
-      this.match = null;
-      this.ctx.setStatus('pick a mode');
+    void this.pendingRematch;
+    this.el.bMenu.onclick = () => this.toMenu();
+    this.el.bHost.onclick = () => this.host();
+    this.el.bJoin.onclick = () => this.join((this.el.code as HTMLInputElement).value);
+    (this.el.code as HTMLInputElement).onkeydown = (e) => {
+      if (e.key === 'Enter') this.join((this.el.code as HTMLInputElement).value);
+      e.stopPropagation();
     };
 
     this.bindInput();
@@ -142,37 +155,171 @@ export class ShootGame implements GameHandle {
 
   // ---------- match ----------
 
-  startMatch(mode: R.Mode): void {
+  startMatch(mode: R.Mode, first = Math.random() < 0.5 ? 0 : 1): void {
     unlockAudio();
-    this.names = mode === 'ai' ? [this.ctx.player, 'Computer'] : ['Blue', 'Red'];
+    if (mode === 'online') {
+      if (this.match?.state === 'over') {
+        // Rematch: both sides must ask; the server restarts us with a fresh kick-off.
+        this.pendingRematch = true;
+        this.send({ kind: 'rematch' });
+        this.el.over.hidden = true;
+        this.banner('Waiting for your opponent', '', 60000);
+        return;
+      }
+    } else {
+      this.names = mode === 'ai' ? [this.ctx.player, 'Computer'] : ['Blue', 'Red'];
+      this.closeSocket();
+    }
     this.el.n0.textContent = this.names[0];
     this.el.n1.textContent = this.names[1];
-    this.match = new R.Match(mode);
+    this.match = new R.Match(mode, mode === 'online' ? this.side : 0);
     this.submitted = false;
+    this.pendingRematch = false;
     this.aim = null;
     this.trail = [];
     this.el.menu.hidden = true;
     this.el.over.hidden = true;
-    this.ctx.setStatus(mode === 'ai' ? 'vs computer' : 'two players');
-    const first = Math.random() < 0.5 ? 0 : 1;
+    this.ctx.setStatus(mode === 'ai' ? 'vs computer' : mode === 'pvp' ? 'two players' : `online · you are ${this.side === 0 ? 'blue' : 'red'}`);
     this.banner('Coin toss', '', 1000, () => {
-      const who = mode === 'ai' ? (first === 0 ? 'You kick off' : 'Computer kicks off') : `${this.names[first]} kicks off`;
+      const who =
+        mode === 'ai' ? (first === 0 ? 'You kick off' : 'Computer kicks off')
+        : mode === 'online' ? (first === this.side ? 'You kick off' : `${this.names[first]} kicks off`)
+        : `${this.names[first]} kicks off`;
       this.banner(who, '', 1200, () => this.handle(this.match!.begin(first)));
     });
+  }
+
+  private toMenu(): void {
+    this.closeSocket();
+    this.el.over.hidden = true;
+    this.el.menu.hidden = false;
+    this.el.banner.classList.remove('show');
+    clearTimeout(this.bannerTimer);
+    this.match = null;
+    this.ctx.setStatus('pick a mode');
+  }
+
+  // ---------- online ----------
+
+  private net(text: string, code?: string): void {
+    this.el.net.textContent = text;
+    if (code) {
+      const c = document.createElement('span');
+      c.className = 'code';
+      c.textContent = code;
+      this.el.net.append(c);
+    }
+  }
+
+  private connect(onOpen: () => void): void {
+    this.closeSocket();
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/shoot-ha`);
+    this.ws = ws;
+    ws.onopen = onOpen;
+    ws.onmessage = (ev) => this.onNet(JSON.parse(String(ev.data)));
+    ws.onerror = () => this.net('Could not reach the match server. Is it running?');
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.ws = null;
+      if (this.match?.mode === 'online' && this.match.state !== 'over') this.opponentLeft('Connection lost');
+    };
+  }
+
+  private closeSocket(): void {
+    const ws = this.ws;
+    this.ws = null;
+    this.code = null;
+    ws?.close();
+  }
+
+  host(): void {
+    unlockAudio();
+    this.net('Connecting…');
+    this.connect(() => this.ws?.send(JSON.stringify({ type: 'host', name: this.ctx.player })));
+  }
+
+  join(code: string): void {
+    unlockAudio();
+    const clean = code.trim().toUpperCase();
+    if (clean.length !== 4) {
+      this.net('Enter the 4-letter code your friend sees');
+      return;
+    }
+    this.net('Joining…');
+    this.connect(() => this.ws?.send(JSON.stringify({ type: 'join', code: clean, name: this.ctx.player })));
+  }
+
+  private send(payload: Record<string, unknown>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'relay', payload }));
+  }
+
+  private onNet(msg: { type: string } & Record<string, unknown>): void {
+    if (msg.type === 'hosted') {
+      this.code = msg.code as string;
+      this.net('Share this code, then wait here:', this.code);
+    } else if (msg.type === 'error') {
+      this.net(msg.message as string);
+      this.closeSocket();
+    } else if (msg.type === 'start') {
+      this.side = msg.side as number;
+      this.names = msg.names as string[];
+      this.el.banner.classList.remove('show');
+      clearTimeout(this.bannerTimer);
+      this.match = null; // so startMatch treats this as a fresh match, not a rematch request
+      this.startMatch('online', msg.first as number);
+    } else if (msg.type === 'relay') {
+      const p = msg.payload as Record<string, unknown>;
+      const m = this.match;
+      if (!m) return;
+      if (p.kind === 'shot') {
+        m.adopt(p.snap as R.Snapshot);
+        const disc = m.world.bodies[p.disc as number];
+        if (disc && disc.team === m.turn && !m.isHuman(m.turn)) {
+          m.shoot(disc, p.vx as number, p.vy as number);
+          this.lastClick = 0;
+          blip({ freq: 600, to: 330, ms: 60, type: 'triangle', gain: 0.2 });
+        }
+      } else if (p.kind === 'timeout') {
+        this.handle(m.timeout(p.team as number));
+      }
+    } else if (msg.type === 'left') {
+      this.opponentLeft(`${this.names[1 - this.side] || 'Your opponent'} left the match`);
+    }
+  }
+
+  private opponentLeft(reason: string): void {
+    const m = this.match;
+    if (!m) return;
+    if (m.state !== 'over') {
+      m.state = 'over';
+      this.aim = null;
+      this.el.ot.textContent = 'Match abandoned';
+      this.el.os.textContent = `${reason}. Score was ${m.score[0]}–${m.score[1]}.`;
+      this.el.over.hidden = false;
+      this.el.banner.classList.remove('show');
+      clearTimeout(this.bannerTimer);
+      this.ctx.setStatus('opponent left');
+    } else {
+      this.net(reason);
+    }
+    this.closeSocket();
   }
 
   private handle(events: R.MatchEvent[]): void {
     const m = this.match!;
     for (const e of events) {
       if (e.type === 'turn') {
-        if (!m.isHuman(e.team)) this.aiTimer = 0.8 + Math.random() * 0.7;
+        if (m.mode === 'ai' && !m.isHuman(e.team)) this.aiTimer = 0.8 + Math.random() * 0.7;
+      } else if (e.type === 'ballIn') {
+        this.goalSound();
       } else if (e.type === 'nogoal') {
         this.banner('No goal', 'Scoring straight from kick-off is a foul', 1900, () => this.handle(m.resume()));
       } else if (e.type === 'goal') {
-        this.goalSound();
         const sub = e.final ? '' : `${this.names[e.team]} ${m.mode === 'ai' && e.team === 0 ? 'score' : 'scores'}`;
         this.banner('GOAL!', sub, e.final ? 1300 : 1700, () => this.handle(m.resume()));
       } else if (e.type === 'over') {
+        if (e.why === 'time' && m.mode === 'online' && e.winner !== this.side) this.send({ kind: 'timeout', team: this.side });
         this.endGame(e.winner, e.why);
       }
     }
@@ -182,13 +329,14 @@ export class ShootGame implements GameHandle {
     const m = this.match!;
     this.aim = null;
     const loser = 1 - winner;
-    this.el.ot.textContent = m.mode === 'ai' ? (winner === 0 ? 'You win' : 'Computer wins') : `${this.names[winner]} wins`;
+    const you = m.mode !== 'pvp';
+    this.el.ot.textContent = you ? (winner === m.localSide ? 'You win' : `${this.names[winner]} ${m.mode === 'ai' ? 'wins' : 'wins'}`) : `${this.names[winner]} wins`;
     this.el.os.textContent =
       why === 'time'
-        ? `${m.mode === 'ai' && loser === 0 ? 'You' : this.names[loser]} ran out of time. Final score ${m.score[0]}–${m.score[1]}.`
+        ? `${you && loser === m.localSide ? 'You' : this.names[loser]} ran out of time. Final score ${m.score[0]}–${m.score[1]}.`
         : `First to ${R.WIN_GOALS} goals. Final score ${m.score[0]}–${m.score[1]}.`;
     this.el.over.hidden = false;
-    if (m.mode === 'ai' && !this.submitted) {
+    if (m.mode !== 'pvp' && !this.submitted) {
       this.submitted = true;
       const score = R.matchScore(m);
       this.ctx.setStatus('submitting…');
@@ -282,6 +430,9 @@ export class ShootGame implements GameHandle {
   shoot(d: R.Body, vx: number, vy: number): void {
     const m = this.match;
     if (!m) return;
+    if (m.mode === 'online' && m.state === 'aim' && m.turn === this.side) {
+      this.send({ kind: 'shot', disc: m.world.bodies.indexOf(d), vx, vy, snap: m.snapshot() });
+    }
     m.shoot(d, vx, vy);
     this.lastClick = 0;
     blip({ freq: 600, to: 330, ms: 60, type: 'triangle', gain: 0.2 });
@@ -485,7 +636,7 @@ export class ShootGame implements GameHandle {
     this.t0 = now;
     const m = this.match;
     if (m) {
-      if (m.state === 'aim' && !m.isHuman(m.turn)) {
+      if (m.mode === 'ai' && m.state === 'aim' && !m.isHuman(m.turn)) {
         this.aiTimer -= dt;
         if (this.aiTimer <= 0) {
           const s = R.aiShot(m.world, m.turn, m.kickoffPending);
@@ -507,6 +658,7 @@ export class ShootGame implements GameHandle {
   }
 
   destroy(): void {
+    this.closeSocket();
     cancelAnimationFrame(this.raf);
     clearTimeout(this.bannerTimer);
     this.observer.disconnect();

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { addScore, topScores } from './db.js';
-import { attachKnockabout } from './knockabout.js';
+import { createKnockaboutRoom, routeUpgrades } from './knockabout.js';
+import { createShoothaRoom } from './shootha.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY = 4 * 1024;
@@ -86,8 +87,11 @@ const server = createServer(async (req, res) => {
   send(res, 404, { error: 'not found' });
 });
 
-attachKnockabout(server, { roundSeconds: Number(process.env.PFG_ROUND_S) || undefined });
+routeUpgrades(server, {
+  '/ws/knockabout': createKnockaboutRoom({ roundSeconds: Number(process.env.PFG_ROUND_S) || undefined }).wss,
+  '/ws/shoot-ha': createShoothaRoom().wss
+});
 
 server.listen(PORT, () => {
-  console.log(`[pfg] score service + knockabout room on http://localhost:${PORT}`);
+  console.log(`[pfg] score service + game rooms on http://localhost:${PORT}`);
 });

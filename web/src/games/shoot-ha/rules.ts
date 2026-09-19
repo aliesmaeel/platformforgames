@@ -22,6 +22,10 @@ export const MAXDRAG = 170;
 export const TIME = 180;
 export const WIN_GOALS = 2;
 export const SIM_STEP = 1 / 240;
+/** Per-sub-step damping (0.972^0.25 and 0.983^0.25) as literals so every engine agrees. */
+const DISC_K = 0.9929252758940619;
+const BALL_K = 0.9957226343895347;
+const len = (x: number, y: number): number => Math.sqrt(x * x + y * y);
 
 const FORM: [number, number][] = [[62, 300], [215, 165], [215, 435], [395, 222], [395, 378]];
 
@@ -59,7 +63,7 @@ export function createWorld(): World {
 
 function walls(b: Body, sound?: Sound): void {
   const inMouth = b.y > TOP && b.y < BOT;
-  const clack = () => sound?.(Math.hypot(b.vx, b.vy) / 6000, 300);
+  const clack = () => sound?.(len(b.vx, b.vy) / 6000, 300);
   if (b.x < 0) {
     if (b.y - b.r < TOP) { b.y = TOP + b.r; b.vy = Math.abs(b.vy) * 0.6; }
     if (b.y + b.r > BOT) { b.y = BOT - b.r; b.vy = -Math.abs(b.vy) * 0.6; }
@@ -75,7 +79,7 @@ function walls(b: Body, sound?: Sound): void {
   for (const [px, py] of POSTS) {
     const dx = b.x - px;
     const dy = b.y - py;
-    const d = Math.hypot(dx, dy);
+    const d = len(dx, dy);
     const min = b.r + POST_R;
     if (d < min && d > 0) {
       const nx = dx / d;
@@ -97,7 +101,7 @@ export const POSTS: [number, number][] = [[0, TOP], [0, BOT], [W, TOP], [W, BOT]
 function collide(a: Body, b: Body, sound?: Sound): void {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  const d = Math.hypot(dx, dy);
+  const d = len(dx, dy);
   const min = a.r + b.r;
   if (d >= min || d === 0) return;
   const nx = dx / d;
@@ -122,15 +126,19 @@ function collide(a: Body, b: Body, sound?: Sound): void {
   }
 }
 
-/** One physics sub-step. Returns the team that just scored, if the ball entered a goal. */
+/**
+ * One physics sub-step of SIM_STEP seconds. Returns the team that just scored
+ * if the ball entered a goal. Uses only exact IEEE operations so two browsers
+ * replaying the same shots stay identical (needed for online play).
+ */
 export function step(world: World, h: number, sound?: Sound): 0 | 1 | null {
   for (const b of world.bodies) {
     b.x += b.vx * h;
     b.y += b.vy * h;
-    const k = Math.pow(b.damp, h * 60);
+    const k = b.ball ? BALL_K : DISC_K;
     b.vx *= k;
     b.vy *= k;
-    const s = Math.hypot(b.vx, b.vy);
+    const s = len(b.vx, b.vy);
     if (s < 7) {
       b.vx = 0;
       b.vy = 0;
@@ -152,7 +160,7 @@ export function freeSpot(world: World, x: number, y: number): number {
   for (let k = 0; k < 40; k++) {
     const off = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 14;
     const ty = Math.min(H - DISC_R, Math.max(DISC_R, y + off));
-    if (world.bodies.every((o) => Math.hypot(o.x - x, o.y - ty) >= o.r + DISC_R + 1)) return ty;
+    if (world.bodies.every((o) => len(o.x - x, o.y - ty) >= o.r + DISC_R + 1)) return ty;
   }
   return y;
 }
@@ -258,10 +266,12 @@ export function aiShot(world: World, team: number, kickoffPending: boolean, rng:
 
 // ---------- match state machine ----------
 
-export type Mode = 'ai' | 'pvp';
+export type Mode = 'ai' | 'pvp' | 'online';
 export type State = 'idle' | 'aim' | 'sim' | 'pause' | 'over';
 
 export type MatchEvent =
+  /** The ball just crossed the line; fires immediately, before the sim settles. */
+  | { type: 'ballIn'; team: number }
   | { type: 'goal'; team: number; final: boolean }
   | { type: 'nogoal' }
   | { type: 'turn'; team: number }
@@ -283,13 +293,17 @@ export class Match {
   private acc = 0;
   private after: (() => MatchEvent[]) | null = null;
   mode: Mode;
+  /** Which side this device controls (both in pvp; 0 = blue against the computer). */
+  localSide: number;
 
-  constructor(mode: Mode) {
+  constructor(mode: Mode, localSide = 0) {
     this.mode = mode;
+    this.localSide = localSide;
   }
 
+  /** Is this side flicked from this device? */
   isHuman(team: number): boolean {
-    return this.mode === 'pvp' || team === 0;
+    return this.mode === 'pvp' || team === this.localSide;
   }
 
   begin(first: number): MatchEvent[] {
@@ -323,23 +337,59 @@ export class Match {
       return [];
     }
     if (this.state !== 'sim') return [];
+    const events: MatchEvent[] = [];
     this.acc += dt;
     while (this.acc >= SIM_STEP) {
       const scored = step(this.world, SIM_STEP, sound);
       if (scored !== null && this.goalScored === null) {
         this.goalScored = scored;
         this.goalAt = this.simTime;
+        events.push({ type: 'ballIn', team: scored });
       }
       this.simTime += SIM_STEP;
       this.acc -= SIM_STEP;
     }
     const settled = allRest(this.world) || (this.goalScored !== null && this.simTime - this.goalAt > 1.3) || this.simTime > 12;
-    if (!settled) return [];
+    if (!settled) return events;
     for (const b of this.world.bodies) {
       b.vx = 0;
       b.vy = 0;
     }
-    return this.resolve();
+    return events.concat(this.resolve());
+  }
+
+  /** Compact state for sending to a remote player before a shot. */
+  snapshot(): Snapshot {
+    return {
+      bodies: this.world.bodies.map((b) => [b.x, b.y]),
+      score: [...this.score],
+      clocks: [...this.clocks],
+      turn: this.turn,
+      kickoffPending: this.kickoffPending
+    };
+  }
+
+  /** Adopt a remote snapshot so both devices shoot from identical positions. */
+  adopt(s: Snapshot): void {
+    s.bodies.forEach(([x, y], i) => {
+      const b = this.world.bodies[i];
+      b.x = x;
+      b.y = y;
+      b.vx = 0;
+      b.vy = 0;
+    });
+    this.score = [...s.score];
+    this.clocks = [...s.clocks];
+    this.turn = s.turn;
+    this.kickoffPending = s.kickoffPending;
+    if (this.state !== 'over') this.state = 'aim';
+  }
+
+  /** The other device reported a time-out on `team`'s clock. */
+  timeout(team: number): MatchEvent[] {
+    if (this.state === 'over') return [];
+    this.clocks[team] = 0;
+    return this.end(1 - team, 'time');
   }
 
   private resolve(): MatchEvent[] {
@@ -383,13 +433,22 @@ export class Match {
   }
 }
 
+export interface Snapshot {
+  bodies: [number, number][];
+  score: number[];
+  clocks: number[];
+  turn: number;
+  kickoffPending: boolean;
+}
+
 export const fmtClock = (s: number): string => {
   s = Math.max(0, Math.ceil(s));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-/** Leaderboard points for a match against the computer. */
+/** Leaderboard points for this device's side in a match against the computer or a remote player. */
 export function matchScore(m: Match): number {
-  const won = m.winner === 0;
-  return (won ? 1000 : 0) + m.score[0] * 100 + (won ? Math.ceil(m.clocks[0]) : 0);
+  const me = m.localSide;
+  const won = m.winner === me;
+  return (won ? 1000 : 0) + m.score[me] * 100 + (won ? Math.ceil(m.clocks[me]) : 0);
 }

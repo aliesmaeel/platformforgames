@@ -34,7 +34,7 @@ leave screenshots at `e2e/.last-*.png`. `npm run e2e ridgeline` runs one file.
 | ----------- | -------------------------- | ---- | -------- | --------------------------------------------------------------- |
 | Dash        | `games/endless-runner`     | 2D   | Phaser   | auto-runner; jump crates, slide under beams, speed ramps        |
 | Gemline     | `games/match-three`        | 2D   | Phaser   | swap-to-match; 8 data-driven levels with colour goals           |
-| Shoot-ha    | `games/shoot-ha`           | 2D   | Canvas   | flick-football; chess clocks; vs computer or two on one device  |
+| Shoot-ha    | `games/shoot-ha`           | 2D   | Canvas   | flick-football; chess clocks; vs computer, one device, or online |
 | Stackfall   | `games/block-drop`         | 2D   | Phaser   | falling blocks; hold, ghost, 7-bag, lock delay                  |
 | Overrun     | `games/arena-shooter`      | 2D   | Phaser   | WASD + mouse waves; pick an upgrade between waves               |
 | Holdfast    | `games/tower-defense`      | 2D   | Phaser   | maze-style TD with a BFS flow field; 20 waves                   |
@@ -46,7 +46,7 @@ leave screenshots at `e2e/.last-*.png`. `npm run e2e ridgeline` runs one file.
 
 Every game keeps its rules in a pure module next to the renderer
 (`board.ts`, `well.ts`, `field.ts`, `rules.ts`, `maze.ts`, `track.ts`,
-`stack.ts`, `physics.ts`, `server/src/arena.js`) with a Node unit test beside it. Levels
+`stack.ts`, `physics.ts`, `server/src/arena.js`, `server/src/shootha.js`) with a Node unit test beside it. Levels
 and waves are plain data (`levels.ts`, `waveSpec`), so content ships without
 engine code.
 
@@ -110,7 +110,18 @@ GET  /api/scores/:gameId?limit=10   → { gameId, scores: [{ rank, player, score
 POST /api/scores  { gameId, player, score }  → { rank, best, ... }
 WS   /ws/knockabout                 client sends {type:'join',name} then {type:'input',dx,dz,dash};
                                     server sends {type:'welcome'}, {type:'state',…} at 20 Hz, {type:'results'}
+WS   /ws/shoot-ha                   {type:'host',name} → {type:'hosted',code}; {type:'join',code,name} →
+                                    {type:'start',side,names,first} to both; then {type:'relay',payload}
+                                    with payload.kind ∈ shot | timeout | rematch is forwarded to the other side
 ```
+
+Shoot-ha online is lockstep rather than server-simulated: both browsers run the
+same physics (written with only exact IEEE operations — no `Math.hypot`/`pow`
+— so engines agree bit for bit), and every shot carries the shooter's
+positions, score and clocks, which the other side adopts before replaying it.
+The server just pairs two players by a 4-letter code and forwards messages.
+`server/src/shootha.test.js` exercises the room; `e2e/shootha-online.test.mjs`
+plays a full match across two browser contexts.
 
 `gameId` is `[a-z0-9-]{1,40}`; player names are trimmed to 24 chars; scores are
 non-negative integers. Nothing is authenticated yet — treat the boards as

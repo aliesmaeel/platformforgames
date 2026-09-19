@@ -8,7 +8,6 @@ import * as A from './arena.js';
  */
 
 const TICK_HZ = 20;
-const PATH = '/ws/knockabout';
 
 const cleanName = (value) =>
   String(value ?? '')
@@ -16,22 +15,13 @@ const cleanName = (value) =>
     .trim()
     .slice(0, 24) || 'anon';
 
-export function attachKnockabout(httpServer, { roundSeconds } = {}) {
+export function createKnockaboutRoom({ roundSeconds } = {}) {
   const wss = new WebSocketServer({ noServer: true });
   const arena = A.createArena();
   if (roundSeconds) arena.roundSeconds = roundSeconds;
   const sockets = new Map(); // id -> ws
   let nextId = 1;
   let lastPhase = arena.phase;
-
-  httpServer.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, 'http://localhost');
-    if (url.pathname !== PATH) {
-      socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
-  });
 
   wss.on('connection', (ws) => {
     const id = `p${nextId++}`;
@@ -85,4 +75,17 @@ export function attachKnockabout(httpServer, { roundSeconds } = {}) {
   timer.unref();
 
   return { wss, arena, close: () => clearInterval(timer) };
+}
+
+/** Route WebSocket upgrades to rooms by path; anything else is refused. */
+export function routeUpgrades(httpServer, routes) {
+  httpServer.on('upgrade', (req, socket, head) => {
+    const url = new URL(req.url, 'http://localhost');
+    const wss = routes[url.pathname];
+    if (!wss) {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  });
 }
