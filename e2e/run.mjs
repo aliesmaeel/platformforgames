@@ -32,7 +32,7 @@ const waitHttp = async (url, tries = 60) => {
   throw new Error(`${url} did not come up`);
 };
 
-start('node', ['--no-warnings', 'server/src/index.js'], { PORT: String(API_PORT), PFG_DB: db }, root);
+start('node', ['--no-warnings', 'server/src/index.js'], { PORT: String(API_PORT), PFG_DB: db, PFG_ROUND_S: '8' }, root);
 start('node', [join(root, 'node_modules/vite/bin/vite.js'), '--port', String(WEB_PORT), '--strictPort'], { PFG_API: `http://localhost:${API_PORT}` }, join(root, 'web'));
 
 try {

@@ -29,6 +29,16 @@ export const CATALOG: GameMeta[] = [
     load: () => import('../games/match-three/index')
   },
   {
+    id: 'shoot-ha',
+    title: 'Shoot-ha',
+    blurb: 'Flick-football. Drag a disc, let go, beat the clock. Two can play on one screen.',
+    dimension: '2D',
+    mood: 'head-to-head',
+    effort: 2,
+    accent: '#ffd23f',
+    load: () => import('../games/shoot-ha/index')
+  },
+  {
     id: 'block-drop',
     title: 'Stackfall',
     blurb: 'Falling blocks, clean lines, rising speed.',
@@ -96,7 +106,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '3D',
     mood: 'flagship',
     effort: 4,
-    accent: '#60a5fa'
+    accent: '#60a5fa',
+    load: () => import('../games/platformer-3d/index')
   },
   {
     id: 'party-arena',
@@ -105,7 +116,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '3D',
     mood: 'social',
     effort: 5,
-    accent: '#fb7185'
+    accent: '#fb7185',
+    load: () => import('../games/party-arena/index')
   }
 ];
 

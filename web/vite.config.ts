@@ -7,6 +7,10 @@ export default defineConfig({
       '/api': {
         target: process.env.PFG_API ?? 'http://localhost:8787',
         changeOrigin: true
+      },
+      '/ws': {
+        target: process.env.PFG_API ?? 'http://localhost:8787',
+        ws: true
       }
     }
   },

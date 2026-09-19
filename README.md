@@ -1,6 +1,6 @@
 # Arcade — a small browser games platform
 
-One shell, many games. The shell owns navigation, the player name and the
+One shell, eleven games. The shell owns navigation, the player name and the
 leaderboard; each game is a module that mounts into a container and reports a
 score when a run ends.
 
@@ -8,30 +8,65 @@ score when a run ends.
 
 ```sh
 npm install
-npm run dev        # score service on :8787 + Vite on :5173
+npm run dev        # score service + Knockabout room on :8787, Vite on :5173
 ```
 
-Open http://localhost:5173. The score service is optional: if it is not
-running, leaderboards fall back to this browser's `localStorage`.
+Open http://localhost:5173. The score service is optional for nine of the
+games: if it is not running, leaderboards fall back to this browser's
+`localStorage`. Knockabout (multiplayer) needs it.
 
-Other scripts: `npm run dev:web`, `npm run dev:server`, `npm run build`
-(type-checks then bundles `web/dist`), `npm run preview`, `npm test`
-(runs `*.test.ts` files under `web/src` with Node's built-in runner — no
-browser needed, so pure game logic like the match-3 board lives in its own
-module and is tested there).
+| Script            | What it does                                                      |
+| ----------------- | ----------------------------------------------------------------- |
+| `npm run dev`     | both servers, with reload                                         |
+| `npm test`        | unit tests for the pure game logic and the arena sim (Node only)  |
+| `npm run e2e`     | headless-Chrome run through every game against isolated servers   |
+| `npm run build`   | type-check, then bundle `web/dist`                                |
+| `npm run preview` | serve the production bundle                                       |
+
+`npm run e2e` needs Chrome (`CHROME_PATH`, default `/usr/bin/google-chrome`).
+It disables WebGL so the suite is deterministic on machines without a GPU;
+`PFG_WEBGL=1 npm run e2e` renders through SwiftShader instead and the tests
+leave screenshots at `e2e/.last-*.png`. `npm run e2e ridgeline` runs one file.
+
+## The games
+
+| Game        | Folder                     | Kind | Engine   | Notes                                                           |
+| ----------- | -------------------------- | ---- | -------- | --------------------------------------------------------------- |
+| Dash        | `games/endless-runner`     | 2D   | Phaser   | auto-runner; jump crates, slide under beams, speed ramps        |
+| Gemline     | `games/match-three`        | 2D   | Phaser   | swap-to-match; 8 data-driven levels with colour goals           |
+| Shoot-ha    | `games/shoot-ha`           | 2D   | Canvas   | flick-football; chess clocks; vs computer or two on one device  |
+| Stackfall   | `games/block-drop`         | 2D   | Phaser   | falling blocks; hold, ghost, 7-bag, lock delay                  |
+| Overrun     | `games/arena-shooter`      | 2D   | Phaser   | WASD + mouse waves; pick an upgrade between waves               |
+| Holdfast    | `games/tower-defense`      | 2D   | Phaser   | maze-style TD with a BFS flow field; 20 waves                   |
+| Tiltway     | `games/ball-maze`          | 3D   | Three.js | tilt the board; 5 ASCII-defined mazes; falls cost time          |
+| Ridgeline   | `games/low-poly-racer`     | 3D   | Three.js | 3-lap time trial; best-lap ghost persists in localStorage       |
+| Skyline     | `games/stack-tower`        | 3D   | Three.js | drop sliding slabs; overhang is sliced; perfects regrow         |
+| Leapfall    | `games/platformer-3d`      | 3D   | Three.js | 3 courses; coyote time, jump buffer, moving platforms, coins    |
+| Knockabout  | `games/party-arena`        | 3D   | Three.js | 4-player shove-off on a shrinking disc; server-authoritative    |
+
+Every game keeps its rules in a pure module next to the renderer
+(`board.ts`, `well.ts`, `field.ts`, `rules.ts`, `maze.ts`, `track.ts`,
+`stack.ts`, `physics.ts`, `server/src/arena.js`) with a Node unit test beside it. Levels
+and waves are plain data (`levels.ts`, `waveSpec`), so content ships without
+engine code.
 
 ## Layout
 
 ```
-server/src/index.js     HTTP score service (Node, no deps)
+server/src/index.js     HTTP score service (Node, no framework)
 server/src/db.js        SQLite via node:sqlite  → ./data/scores.db
+server/src/arena.js     Knockabout simulation (pure, tick-driven)
+server/src/knockabout.js  WebSocket room at /ws/knockabout, 20 Hz snapshots
 web/src/platform/       the shell
-  types.ts              GameModule / GameContext contract
-  registry.ts           catalog: title, blurb, tags, lazy loader
+  types.ts              GameModule / GameContext / GameMeta contract
+  registry.ts           catalog: title, blurb, tags, lazy loader, score format
   shell.ts              routing (#/ and #/play/<id>), mount/unmount, leaderboard panel
   scores.ts             API client with localStorage fallback
   player.ts             persisted player name
+web/src/games/_shared/  helpers: phaser.ts (mount, overlay), three.ts (app, lights),
+                        hud.ts (DOM readouts/panel for 3D), audio.ts (synth blips)
 web/src/games/<id>/     one folder per game, default-exports a GameModule
+e2e/                    run.mjs boots isolated servers; one *.test.mjs per game
 ```
 
 ## Adding a game
@@ -51,17 +86,21 @@ web/src/games/<id>/     one folder per game, default-exports a GameModule
    export default game;
    ```
 
+   For Phaser, `mountPhaser(container, ctx, key, Scene, { width, height })`
+   in `_shared/phaser.ts` handles boot/teardown and gives you `Overlay` and
+   `finishRun`. For Three.js, `createThreeApp` + `createHud` +
+   `finishRunHud` do the same.
+
 2. Give its entry in `registry.ts` a `load: () => import('../games/<id>/index')`.
-   The card flips from "in the works" to a Play button; the leaderboard is keyed by `id`.
+   The card flips from "in the works" to a Play button; the leaderboard is
+   keyed by `id`. Add `formatScore` if the number is not a plain score
+   (Ridgeline stores `600000 − lapMs` so the shared high-to-low sort ranks
+   the fastest lap first, and formats it back to `m:ss.ss`).
 
-The game folder can use any engine. The 2D games use Phaser 3 (lazy-loaded, so
-the catalog page stays small; Vite shares one Phaser chunk between them); 3D
-games are expected to use Three.js.
-
-Keep rules separate from rendering where you can: `match-three/board.ts` is
-pure functions over a number grid, `match-three/levels.ts` is plain data, and
-`MatchScene.ts` only animates what those two decide. New levels are a line in
-`levels.ts`.
+3. Put the rules in a pure module with a `*.test.ts` beside it (imports need
+   the `.ts` extension so Node can run them), and add an `e2e/<name>.test.mjs`
+   that drives the real game through `window.__pfg` (a DEV-only hook the
+   mount helpers expose).
 
 ## Score API
 
@@ -69,13 +108,18 @@ pure functions over a number grid, `match-three/levels.ts` is plain data, and
 GET  /api/health
 GET  /api/scores/:gameId?limit=10   → { gameId, scores: [{ rank, player, score, created }] }
 POST /api/scores  { gameId, player, score }  → { rank, best, ... }
+WS   /ws/knockabout                 client sends {type:'join',name} then {type:'input',dx,dz,dash};
+                                    server sends {type:'welcome'}, {type:'state',…} at 20 Hz, {type:'results'}
 ```
 
 `gameId` is `[a-z0-9-]{1,40}`; player names are trimmed to 24 chars; scores are
-non-negative integers. Nothing is authenticated yet — treat the board as
-"honor system" until accounts exist.
+non-negative integers. Nothing is authenticated yet — treat the boards as
+"honor system" until accounts exist. `PFG_ROUND_S` shortens Knockabout rounds
+(the e2e runner sets it to 8).
 
-## Roadmap
+## Deploying
 
-See the catalog on the home page. Build order: Dash (done) → Gemline (done)
-→ Tiltway (3D ball maze) → the rest, so the shell hardens on simple games first.
+`npm run build` produces static files in `web/dist`. Serve them from any
+static host and put the Node service behind the same origin at `/api` and
+`/ws` (or set `PFG_API` at build time for the dev proxy). The service needs
+Node ≥ 22.5 for `node:sqlite` and writes `data/scores.db` next to where it runs.

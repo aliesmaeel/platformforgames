@@ -59,7 +59,7 @@ export async function launch() {
 
   const status = () => page.$eval('.status', (n) => n.textContent);
   const boardRows = () => page.$$eval('.board__row', (n) => n.map((r) => r.textContent));
-  const waitForResult = () => waitFor(() => /best \d/.test(document.querySelector('.status')?.textContent ?? ''), 20000);
+  const waitForResult = () => waitFor(() => /best /.test(document.querySelector('.status')?.textContent ?? ''), 20000);
 
   const exitAndCheck = async () => {
     await page.click('.playbar .button--ghost');

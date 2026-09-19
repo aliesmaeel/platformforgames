@@ -8,6 +8,8 @@ const CSS = `
 .pfg-hud{position:absolute;inset:0;pointer-events:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#e8ecf5}
 .pfg-hud__tl{position:absolute;top:14px;left:18px}
 .pfg-hud__tr{position:absolute;top:14px;right:18px;text-align:right}
+.pfg-hud__list{position:absolute;top:72px;right:18px;text-align:right;font-size:13px;line-height:1.5;color:#99a2b8;white-space:pre}
+.pfg-hud__list .me{color:#4cc9f0;font-weight:600}
 .pfg-hud__big{font-size:32px;line-height:1;font-weight:600}
 .pfg-hud__label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#5c6684;margin-top:4px}
 .pfg-hud__hint{position:absolute;left:18px;bottom:12px;font-size:12px;color:#5c6684}
@@ -27,6 +29,8 @@ export interface Hud {
   setTopLeft(big: string, label: string): void;
   setTopRight(big: string, label: string): void;
   setHint(text: string): void;
+  /** Right-hand list, e.g. a scoreboard; entries with `me` are highlighted. */
+  setList(rows: { text: string; me?: boolean }[]): void;
   toast(text: string, ms?: number): void;
   panel(spec: { title: string; big?: string; detail: string; hint: string } | null): void;
   destroy(): void;
@@ -50,6 +54,7 @@ export function createHud(container: HTMLElement): Hud {
   const tl = el('pfg-hud__tl');
   const tr = el('pfg-hud__tr');
   const hint = el('pfg-hud__hint');
+  const list = el('pfg-hud__list');
   const toast = el('pfg-hud__toast');
   let panelNode: HTMLDivElement | null = null;
   let toastTimer = 0;
@@ -70,6 +75,16 @@ export function createHud(container: HTMLElement): Hud {
     setTopLeft: (big, label) => corner(tl, big, label),
     setTopRight: (big, label) => corner(tr, big, label),
     setHint: (text) => (hint.textContent = text),
+    setList(rows) {
+      list.replaceChildren(
+        ...rows.map((r) => {
+          const n = document.createElement('div');
+          n.textContent = r.text;
+          if (r.me) n.className = 'me';
+          return n;
+        })
+      );
+    },
     toast(text, ms = 900) {
       toast.textContent = text;
       toast.classList.add('is-on');
