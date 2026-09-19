@@ -1,4 +1,5 @@
 import type { ScoreEntry, ScoreResult } from './types';
+import { API_BASE } from './endpoints';
 
 /**
  * Leaderboards talk to the score service, and fall back to a per-browser board
@@ -39,7 +40,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 
 export async function topScores(gameId: string, limit = 10): Promise<{ scores: ScoreEntry[]; offline: boolean }> {
   try {
-    const res = await request(`/api/scores/${encodeURIComponent(gameId)}?limit=${limit}`);
+    const res = await request(`${API_BASE}/api/scores/${encodeURIComponent(gameId)}?limit=${limit}`);
     if (!res.ok) throw new Error(String(res.status));
     const body = (await res.json()) as { scores: ScoreEntry[] };
     return { scores: body.scores, offline: false };
@@ -51,7 +52,7 @@ export async function topScores(gameId: string, limit = 10): Promise<{ scores: S
 export async function submitScore(gameId: string, player: string, score: number): Promise<ScoreResult> {
   const value = Math.max(0, Math.floor(score));
   try {
-    const res = await request('/api/scores', {
+    const res = await request(`${API_BASE}/api/scores`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ gameId, player, score: value })

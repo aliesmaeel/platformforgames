@@ -3,6 +3,7 @@ import type { GameContext, GameHandle } from '../../platform/types';
 import { addLights, createThreeApp, mat, type ThreeApp } from '../_shared/three';
 import { createHud, finishRunHud, type Hud } from '../_shared/hud';
 import { blip, noise, unlockAudio } from '../_shared/audio';
+import { wsUrl } from '../../platform/endpoints';
 
 /**
  * Knockabout client: renders what the server says and sends intent. The
@@ -84,8 +85,7 @@ export class KnockGame implements GameHandle {
   // ---------- network ----------
 
   private connect(): void {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws/knockabout`);
+    const ws = new WebSocket(wsUrl('/ws/knockabout'));
     this.ws = ws;
     ws.onopen = () => {
       this.connected = true;

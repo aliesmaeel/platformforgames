@@ -1,5 +1,6 @@
 import type { GameContext, GameHandle } from '../../platform/types';
 import { blip, unlockAudio } from '../_shared/audio';
+import { wsUrl } from '../../platform/endpoints';
 import * as R from './rules.ts';
 
 /**
@@ -213,8 +214,7 @@ export class ShootGame implements GameHandle {
 
   private connect(onOpen: () => void): void {
     this.closeSocket();
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws/shoot-ha`);
+    const ws = new WebSocket(wsUrl('/ws/shoot-ha'));
     this.ws = ws;
     ws.onopen = onOpen;
     ws.onmessage = (ev) => this.onNet(JSON.parse(String(ev.data)));

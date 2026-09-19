@@ -1,0 +1,4 @@
+server
+e2e
+data
+*.test.*

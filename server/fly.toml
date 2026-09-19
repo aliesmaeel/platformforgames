@@ -1,0 +1,20 @@
+# fly launch --no-deploy && fly volumes create pfg_data --size 1 && fly deploy
+app = "arcade-api"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+  PFG_DB = "/data/scores.db"
+
+[mounts]
+  source = "pfg_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = false
+  min_machines_running = 1

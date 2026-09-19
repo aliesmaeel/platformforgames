@@ -130,7 +130,48 @@ non-negative integers. Nothing is authenticated yet — treat the boards as
 
 ## Deploying
 
-`npm run build` produces static files in `web/dist`. Serve them from any
-static host and put the Node service behind the same origin at `/api` and
-`/ws` (or set `PFG_API` at build time for the dev proxy). The service needs
-Node ≥ 22.5 for `node:sqlite` and writes `data/scores.db` next to where it runs.
+The web app is static; the score service and game rooms are one long-running
+Node process. They deploy separately.
+
+### Web on Vercel (auto-deploys from Git)
+
+`vercel.json` is already set up (build `npm run build`, output `web/dist`).
+
+1. Push this repo to GitHub (or GitLab/Bitbucket).
+2. In Vercel: **Add New → Project → Import** the repo. Leave the detected
+   settings — they come from `vercel.json`.
+3. Under **Environment Variables** add `VITE_PFG_API` = the public origin of
+   your server (step below), e.g. `https://arcade-api.fly.dev`. Skip it for
+   now if you have no server yet: every game still runs, leaderboards fall
+   back to this-browser-only, and the online modes say the server is missing.
+4. Deploy. From then on every push to the default branch deploys to
+   production and every other branch/PR gets a preview URL.
+
+`VITE_PFG_API` is read at build time (see `web/src/platform/endpoints.ts`),
+so changing it means redeploying. The service already sends permissive CORS
+headers, and WebSockets connect to the same origin over `wss://`.
+
+### Server anywhere that runs a container
+
+Vercel functions cannot hold WebSockets or a writable SQLite file, so the
+service lives elsewhere. `server/Dockerfile` builds it; it listens on `PORT`
+(8787) and writes `PFG_DB` (`/data/scores.db`), so mount a volume at `/data`.
+
+Fly.io, as one example, with `server/fly.toml` included:
+
+```sh
+cd server
+fly launch --no-deploy        # accept the app name or edit fly.toml
+fly volumes create pfg_data --size 1
+fly deploy
+```
+
+Railway, Render, a VPS with Docker, etc. all work the same way: build the
+Dockerfile, attach persistent storage at `/data`, expose port 8787 behind
+HTTPS, then put that origin in Vercel's `VITE_PFG_API`.
+
+### Checks on push
+
+`.github/workflows/ci.yml` runs `npm test` and the production build on every
+push and pull request, so a red build shows up on the PR before Vercel's
+preview does.
