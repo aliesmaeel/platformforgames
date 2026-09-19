@@ -15,7 +15,10 @@ Open http://localhost:5173. The score service is optional: if it is not
 running, leaderboards fall back to this browser's `localStorage`.
 
 Other scripts: `npm run dev:web`, `npm run dev:server`, `npm run build`
-(type-checks then bundles `web/dist`), `npm run preview`.
+(type-checks then bundles `web/dist`), `npm run preview`, `npm test`
+(runs `*.test.ts` files under `web/src` with Node's built-in runner — no
+browser needed, so pure game logic like the match-3 board lives in its own
+module and is tested there).
 
 ## Layout
 
@@ -51,8 +54,14 @@ web/src/games/<id>/     one folder per game, default-exports a GameModule
 2. Give its entry in `registry.ts` a `load: () => import('../games/<id>/index')`.
    The card flips from "in the works" to a Play button; the leaderboard is keyed by `id`.
 
-The game folder can use any engine. `endless-runner` uses Phaser 3 (lazy-loaded,
-so the catalog page stays small); 3D games are expected to use Three.js.
+The game folder can use any engine. The 2D games use Phaser 3 (lazy-loaded, so
+the catalog page stays small; Vite shares one Phaser chunk between them); 3D
+games are expected to use Three.js.
+
+Keep rules separate from rendering where you can: `match-three/board.ts` is
+pure functions over a number grid, `match-three/levels.ts` is plain data, and
+`MatchScene.ts` only animates what those two decide. New levels are a line in
+`levels.ts`.
 
 ## Score API
 
@@ -68,5 +77,5 @@ non-negative integers. Nothing is authenticated yet — treat the board as
 
 ## Roadmap
 
-See the catalog on the home page. Build order: Dash (done) → Gemline (match-3)
+See the catalog on the home page. Build order: Dash (done) → Gemline (done)
 → Tiltway (3D ball maze) → the rest, so the shell hardens on simple games first.

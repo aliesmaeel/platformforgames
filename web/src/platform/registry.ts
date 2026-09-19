@@ -22,7 +22,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '2D',
     mood: 'casual',
     effort: 2,
-    accent: '#f72585'
+    accent: '#f72585',
+    load: () => import('../games/match-three/index')
   },
   {
     id: 'block-drop',
