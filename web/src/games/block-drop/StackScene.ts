@@ -89,7 +89,7 @@ export class StackScene extends Phaser.Scene {
     label(this, RIGHT_X, WELL_Y + 370, 'LINES');
     this.linesText = this.add.text(RIGHT_X, WELL_Y + 384, '0', { fontFamily: MONO, fontSize: '28px', color: COLOURS.text });
 
-    this.add.text(LEFT_X, HEIGHT - 120, '← → move\n↑ / X rotate · Z back\n↓ soft · space hard\nC hold · Esc leave', {
+    this.add.text(LEFT_X - 60, HEIGHT - 120, '← → move\n↑ / X rotate · Z back\n↓ soft · space hard\nC hold · Esc leave', {
       fontFamily: MONO,
       fontSize: '12px',
       color: COLOURS.faint,

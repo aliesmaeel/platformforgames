@@ -42,7 +42,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '2D',
     mood: 'competitive',
     effort: 3,
-    accent: '#ff9f1c'
+    accent: '#ff9f1c',
+    load: () => import('../games/arena-shooter/index')
   },
   {
     id: 'tower-defense',
