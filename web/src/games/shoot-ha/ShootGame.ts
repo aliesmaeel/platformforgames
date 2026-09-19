@@ -14,7 +14,7 @@ const TEAM = [
 ];
 
 const CSS = `
-.sh{position:absolute;inset:0;display:flex;flex-direction:column;background:#0a2a10;font-family:system-ui,sans-serif;color:#eef8ea}
+.sh{position:absolute;inset:0;display:flex;flex-direction:column;background:#0a2a10;font-family:system-ui,sans-serif;color:#eef8ea;container-type:size}
 .sh__hud{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;padding:6px 8px 4px;align-items:stretch}
 .sh__player{display:flex;align-items:center;gap:8px;padding:4px 18px 4px 10px;background:#0e3616;color:#f2fbef;min-width:0;opacity:.7;border-bottom:3px solid transparent;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
 .sh__player.p1{flex-direction:row-reverse;padding:4px 10px 4px 18px;clip-path:polygon(0 0,100% 0,100% 100%,14px 100%)}
@@ -36,17 +36,18 @@ const CSS = `
 .sh__overlay{position:absolute;inset:0;display:grid;place-items:center;padding:12px;background:rgba(3,18,7,.78)}
 .sh__overlay[hidden]{display:none}
 .sh__card{max-width:440px;width:100%;text-align:center;max-height:100%;overflow:auto}
-.sh__card h1{margin:0;font-weight:800;font-size:clamp(36px,6vw,60px);line-height:.9;color:#fff}
-.sh__card h1 small{display:block;font-weight:700;font-size:.36em;color:#ffd23f;margin-top:6px}
-.sh__card ul{text-align:left;margin:12px auto;padding-left:20px;font-size:13px;line-height:1.5;color:#cfe3ca;max-width:56ch}
+.sh__card h1{margin:0;font-weight:800;font-size:clamp(28px,5vw,48px);line-height:.9;color:#fff}
+.sh__card h1 small{display:block;font-weight:700;font-size:.36em;color:#ffd23f;margin-top:4px}
+.sh__card ul{text-align:left;margin:10px auto;padding-left:18px;font-size:12px;line-height:1.45;color:#cfe3ca;max-width:56ch}
+@container (max-height:430px){.sh__card ul{display:none}.sh__card h1{font-size:28px}}
 .sh__card p{margin:8px 0 12px;color:#cfe3ca}
 .sh__btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.sh__btns button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:999px;padding:10px 18px;cursor:pointer;background:#ffd23f;color:#1b1500;box-shadow:0 3px 0 #a88400}
+.sh__btns button{font:inherit;font-weight:700;font-size:13px;border:0;border-radius:999px;padding:8px 16px;cursor:pointer;background:#ffd23f;color:#1b1500;box-shadow:0 3px 0 #a88400}
 .sh__btns button.alt{background:#e8f3e5;color:#0e3616;box-shadow:0 3px 0 #97ad93}
 .sh__btns button:active{transform:translateY(2px);box-shadow:none}
-.sh__btns input{font:inherit;font-family:ui-monospace,monospace;font-weight:700;font-size:16px;width:92px;text-align:center;text-transform:uppercase;letter-spacing:.15em;border:2px solid #1f5a2a;border-radius:999px;background:#050d06;color:#c8ff3d;padding:8px 10px}
-.sh__online{margin:16px 0 8px!important;font-size:13px;color:#9bb898!important}
-.sh__net{min-height:1.2em;font-family:ui-monospace,monospace;font-size:13px;color:#ffd23f!important;margin:10px 0 0!important}
+.sh__btns input{font:inherit;font-family:ui-monospace,monospace;font-weight:700;font-size:15px;width:88px;text-align:center;text-transform:uppercase;letter-spacing:.15em;border:2px solid #1f5a2a;border-radius:999px;background:#050d06;color:#c8ff3d;padding:6px 10px}
+.sh__online{margin:12px 0 6px!important;font-size:12px;color:#9bb898!important}
+.sh__net{min-height:1.2em;font-family:ui-monospace,monospace;font-size:12px;color:#ffd23f!important;margin:8px 0 0!important}
 .sh__net .code{font-size:26px;letter-spacing:.2em;color:#c8ff3d;display:block;margin-top:2px}
 `;
 
@@ -218,7 +219,8 @@ export class ShootGame implements GameHandle {
     this.ws = ws;
     ws.onopen = onOpen;
     ws.onmessage = (ev) => this.onNet(JSON.parse(String(ev.data)));
-    ws.onerror = () => this.net('Could not reach the match server. Is it running?');
+    ws.onerror = () =>
+      this.net(`Could not reach the match server at ${new URL(ws.url).host}. It needs the score service running (npm run dev), and both players must open the same site address.`);
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;

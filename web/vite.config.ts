@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
+    // Listen on all interfaces so a second computer on the LAN can open the
+    // dev site (Vite prints the Network URL) and reach /api and /ws through the proxy.
+    host: true,
     port: 5173,
     proxy: {
       '/api': {
