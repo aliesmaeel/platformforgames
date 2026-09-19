@@ -5,7 +5,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        target: process.env.PFG_API ?? 'http://localhost:8787',
         changeOrigin: true
       }
     }

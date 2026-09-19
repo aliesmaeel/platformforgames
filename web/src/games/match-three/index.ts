@@ -1,29 +1,10 @@
-import Phaser from 'phaser';
-import type { GameContext, GameHandle, GameModule } from '../../platform/types';
+import type { GameModule } from '../../platform/types';
+import { mountPhaser } from '../_shared/phaser';
 import { HEIGHT, MatchScene, WIDTH } from './MatchScene';
 
 const game: GameModule = {
-  mount(container: HTMLElement, ctx: GameContext): GameHandle {
-    const instance = new Phaser.Game({
-      type: Phaser.AUTO,
-      parent: container,
-      width: WIDTH,
-      height: HEIGHT,
-      backgroundColor: '#070910',
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-      input: { keyboard: true, touch: true },
-      scene: []
-    });
-
-    instance.scene.add('match', MatchScene, true, { ctx });
-    if (import.meta.env.DEV) Object.assign(window, { __match: instance });
-
-    return {
-      destroy() {
-        instance.destroy(true);
-      }
-    };
-  }
+  mount: (container, ctx) =>
+    mountPhaser(container, ctx, 'match', MatchScene, { width: WIDTH, height: HEIGHT })
 };
 
 export default game;

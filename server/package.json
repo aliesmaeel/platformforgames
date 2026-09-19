@@ -6,5 +6,8 @@
   "scripts": {
     "dev": "node --watch --no-warnings src/index.js",
     "start": "node --no-warnings src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }
