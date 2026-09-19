@@ -52,7 +52,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '2D',
     mood: 'strategy',
     effort: 4,
-    accent: '#8ac926'
+    accent: '#8ac926',
+    load: () => import('../games/tower-defense/index')
   },
   {
     id: 'ball-maze',
