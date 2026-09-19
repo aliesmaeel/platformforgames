@@ -1,5 +1,8 @@
 import type { GameMeta } from './types';
 
+/** Ridgeline stores laps as (ceiling − ms) so the shared high-score sort ranks the fastest lap first. */
+const fmtLap = (ms: number): string => `${Math.floor(ms / 60000)}:${((ms % 60000) / 1000).toFixed(2).padStart(5, '0')}`;
+
 /**
  * The catalog. A game becomes playable the moment it gets a `load` function
  * pointing at a module that default-exports a GameModule.
@@ -72,7 +75,9 @@ export const CATALOG: GameMeta[] = [
     dimension: '3D',
     mood: 'competitive',
     effort: 3,
-    accent: '#ffd166'
+    accent: '#ffd166',
+    formatScore: (score) => fmtLap(600000 - score),
+    load: () => import('../games/low-poly-racer/index')
   },
   {
     id: 'stack-tower',

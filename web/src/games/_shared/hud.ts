@@ -108,13 +108,14 @@ export function finishRunHud(
   ctx: { submitScore(score: number): Promise<{ rank: number; best: number; offline: boolean } | null>; setStatus(t: string): void },
   hud: Hud,
   score: number,
-  spec: { title: string; detail: string; hint: string; big?: string }
+  spec: { title: string; detail: string; hint: string; big?: string; formatBest?: (score: number) => string }
 ): void {
   const big = spec.big ?? score.toLocaleString();
+  const fmt = spec.formatBest ?? ((n: number) => String(n));
   hud.panel({ ...spec, big, detail: `${spec.detail} · submitting…` });
   void ctx.submitScore(score).then((result) => {
     if (!result) return;
-    ctx.setStatus(`best ${result.best}${result.offline ? ' (offline)' : ''}`);
+    ctx.setStatus(`best ${fmt(result.best)}${result.offline ? ' (offline)' : ''}`);
     hud.panel({ ...spec, big, detail: `rank #${result.rank} · ${spec.detail}` });
   });
 }
