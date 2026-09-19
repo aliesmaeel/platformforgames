@@ -115,7 +115,13 @@ WS   /ws/shoot-ha                   {type:'host',name} → {type:'hosted',code};
                                     with payload.kind ∈ shot | timeout | rematch is forwarded to the other side
 ```
 
-Shoot-ha online is lockstep rather than server-simulated: both browsers run the
+Shoot-ha online has two transports behind one interface
+(`web/src/games/shoot-ha/transport.ts`): the relay room above, used in
+development or when `VITE_PFG_API` points at a server, and a **peer-to-peer**
+WebRTC link (PeerJS, with its public signalling server exchanging the code)
+used automatically on a static deploy such as Vercel — so that mode works with
+no server of your own. Append `?net=peer` or `?net=relay` to the URL to force
+one. Either way the match is lockstep rather than server-simulated: both browsers run the
 same physics (written with only exact IEEE operations — no `Math.hypot`/`pow`
 — so engines agree bit for bit), and every shot carries the shooter's
 positions, score and clocks, which the other side adopts before replaying it.
@@ -142,8 +148,9 @@ Node process. They deploy separately.
    settings — they come from `vercel.json`.
 3. Under **Environment Variables** add `VITE_PFG_API` = the public origin of
    your server (step below), e.g. `https://arcade-api.fly.dev`. Skip it for
-   now if you have no server yet: every game still runs, leaderboards fall
-   back to this-browser-only, and the online modes say the server is missing.
+   now if you have no server yet: every game still runs, Shoot-ha online
+   connects the two browsers directly, leaderboards fall back to
+   this-browser-only, and Knockabout says the server is missing.
 4. Deploy. From then on every push to the default branch deploys to
    production and every other branch/PR gets a preview URL.
 

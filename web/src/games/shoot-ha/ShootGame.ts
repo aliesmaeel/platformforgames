@@ -1,6 +1,6 @@
 import type { GameContext, GameHandle } from '../../platform/types';
 import { blip, unlockAudio } from '../_shared/audio';
-import { wsUrl } from '../../platform/endpoints';
+import { createTransport, type NetMessage, type Transport } from './transport.ts';
 import * as R from './rules.ts';
 
 /**
@@ -79,7 +79,7 @@ export class ShootGame implements GameHandle {
   match: R.Match | null = null;
   names = ['You', 'Computer'];
   submitted = false;
-  ws: WebSocket | null = null;
+  transport: Transport | null = null;
   side = 0;
   code: string | null = null;
   private pendingRematch = false;
@@ -213,32 +213,29 @@ export class ShootGame implements GameHandle {
     }
   }
 
-  private connect(onOpen: () => void): void {
+  private async transportFor(): Promise<Transport | null> {
     this.closeSocket();
-    const ws = new WebSocket(wsUrl('/ws/shoot-ha'));
-    this.ws = ws;
-    ws.onopen = onOpen;
-    ws.onmessage = (ev) => this.onNet(JSON.parse(String(ev.data)));
-    ws.onerror = () =>
-      this.net(`Could not reach the match server at ${new URL(ws.url).host}. It needs the score service running (npm run dev), and both players must open the same site address.`);
-    ws.onclose = () => {
-      if (this.ws !== ws) return;
-      this.ws = null;
-      if (this.match?.mode === 'online' && this.match.state !== 'over') this.opponentLeft('Connection lost');
-    };
+    try {
+      const t = await createTransport((m) => this.onNet(m));
+      this.transport = t;
+      return t;
+    } catch {
+      this.net('Could not load the online module. Check your connection and try again.');
+      return null;
+    }
   }
 
   private closeSocket(): void {
-    const ws = this.ws;
-    this.ws = null;
+    const t = this.transport;
+    this.transport = null;
     this.code = null;
-    ws?.close();
+    t?.close();
   }
 
   host(): void {
     unlockAudio();
     this.net('Connecting…');
-    this.connect(() => this.ws?.send(JSON.stringify({ type: 'host', name: this.ctx.player })));
+    void this.transportFor().then((t) => t?.host(this.ctx.player));
   }
 
   join(code: string): void {
@@ -249,29 +246,30 @@ export class ShootGame implements GameHandle {
       return;
     }
     this.net('Joining…');
-    this.connect(() => this.ws?.send(JSON.stringify({ type: 'join', code: clean, name: this.ctx.player })));
+    void this.transportFor().then((t) => t?.join(clean, this.ctx.player));
   }
 
   private send(payload: Record<string, unknown>): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'relay', payload }));
+    this.transport?.send(payload);
   }
 
-  private onNet(msg: { type: string } & Record<string, unknown>): void {
+  private onNet(msg: NetMessage): void {
     if (msg.type === 'hosted') {
-      this.code = msg.code as string;
-      this.net('Share this code, then wait here:', this.code);
+      this.code = msg.code;
+      const how = this.transport?.kind === 'peer' ? 'Share this code (connects browser to browser):' : 'Share this code, then wait here:';
+      this.net(how, this.code);
     } else if (msg.type === 'error') {
-      this.net(msg.message as string);
+      this.net(msg.message);
       this.closeSocket();
     } else if (msg.type === 'start') {
-      this.side = msg.side as number;
-      this.names = msg.names as string[];
+      this.side = msg.side;
+      this.names = msg.names;
       this.el.banner.classList.remove('show');
       clearTimeout(this.bannerTimer);
       this.match = null; // so startMatch treats this as a fresh match, not a rematch request
-      this.startMatch('online', msg.first as number);
+      this.startMatch('online', msg.first);
     } else if (msg.type === 'relay') {
-      const p = msg.payload as Record<string, unknown>;
+      const p = msg.payload;
       const m = this.match;
       if (!m) return;
       if (p.kind === 'shot') {
@@ -286,7 +284,9 @@ export class ShootGame implements GameHandle {
         this.handle(m.timeout(p.team as number));
       }
     } else if (msg.type === 'left') {
-      this.opponentLeft(`${this.names[1 - this.side] || 'Your opponent'} left the match`);
+      if (this.match?.mode === 'online') this.opponentLeft(`${this.names[1 - this.side] || 'Your opponent'} left the match`);
+      else if (this.code) this.net('Connection closed before anyone joined. Host again to get a new code.');
+      this.closeSocket();
     }
   }
 

@@ -17,6 +17,8 @@ export default defineConfig({
       }
     }
   },
+  // Pre-bundle the lazily imported peer library so its first use in dev does not trigger a reload.
+  optimizeDeps: { include: ['peerjs'] },
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1500
