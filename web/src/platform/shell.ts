@@ -123,15 +123,17 @@ export function startShell(root: HTMLElement): void {
     const refreshBoard = async () => {
       boardBody.replaceChildren(el('p', 'muted', 'loading…'));
       const { scores, offline } = await topScores(meta.id);
-      boardBody.replaceChildren(renderBoard(scores, offline, getPlayer()));
+      boardBody.replaceChildren(renderBoard(scores, offline, getPlayer(), meta.formatScore));
     };
     void refreshBoard();
 
     try {
       const mod = await meta.load!();
+      let statusSet = false;
       const handle = await mod.default.mount(stage, {
         player: getPlayer(),
         setStatus: (text) => {
+          statusSet = true;
           status.textContent = text;
         },
         exit: () => {
@@ -144,7 +146,7 @@ export function startShell(root: HTMLElement): void {
         }
       });
       mounted = { handle, meta };
-      status.textContent = 'good luck';
+      if (!statusSet) status.textContent = 'good luck';
     } catch (err) {
       console.error('[pfg] failed to load game', err);
       status.textContent = 'failed to load';
@@ -155,7 +157,8 @@ export function startShell(root: HTMLElement): void {
   function renderBoard(
     scores: { rank: number; player: string; score: number }[],
     offline: boolean,
-    me: string
+    me: string,
+    format: (score: number) => string = (n) => n.toLocaleString()
   ): HTMLElement {
     const wrap = el('div');
     if (scores.length === 0) {
@@ -167,7 +170,7 @@ export function startShell(root: HTMLElement): void {
         item.append(
           el('span', 'board__rank', String(row.rank)),
           el('span', 'board__player', row.player),
-          el('span', 'board__score', row.score.toLocaleString())
+          el('span', 'board__score', format(row.score))
         );
         list.append(item);
       }

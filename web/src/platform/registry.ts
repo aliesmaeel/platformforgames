@@ -62,7 +62,8 @@ export const CATALOG: GameMeta[] = [
     dimension: '3D',
     mood: 'relaxing',
     effort: 2,
-    accent: '#5eead4'
+    accent: '#5eead4',
+    load: () => import('../games/ball-maze/index')
   },
   {
     id: 'low-poly-racer',

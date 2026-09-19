@@ -45,6 +45,8 @@ export interface GameMeta {
   /** Rough build effort, 1 (a weekend) to 5 (a season). */
   effort: 1 | 2 | 3 | 4 | 5;
   accent: string;
+  /** How a raw score reads on the leaderboard (e.g. a lap time). Defaults to a number. */
+  formatScore?: (score: number) => string;
   /** Present once the game is playable; absent means "on the roadmap". */
   load?: () => Promise<{ default: GameModule }>;
 }

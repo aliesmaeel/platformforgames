@@ -116,13 +116,13 @@ export class DefenseScene extends Phaser.Scene {
 
     const text = (x: number, size: number, colour: string) =>
       this.add.text(x, BAR_Y + 30, '', { fontFamily: MONO, fontSize: `${size}px`, color: colour }).setOrigin(0, 0.5).setDepth(11);
-    this.goldText = text(16, 20, '#ffd166');
-    this.livesText = text(116, 20, '#8ac926');
-    this.waveText = text(206, 14, COLOURS.dim);
+    this.goldText = text(14, 18, '#ffd166');
+    this.livesText = text(96, 18, '#8ac926');
+    this.waveText = text(160, 12, COLOURS.dim);
 
     (Object.values(F.TOWERS) as F.TowerSpec[]).forEach((spec, i) => {
-      const x = 320 + i * 118;
-      const btn = this.add.rectangle(x, BAR_Y + 30, 108, 44, COLOURS.panel).setStrokeStyle(1, COLOURS.line).setDepth(11).setInteractive({ useHandCursor: true });
+      const x = 300 + i * 106;
+      const btn = this.add.rectangle(x, BAR_Y + 30, 100, 44, COLOURS.panel).setStrokeStyle(1, COLOURS.line).setDepth(11).setInteractive({ useHandCursor: true });
       btn.on('pointerdown', () => this.selectKind(spec.kind));
       this.buttons.push(btn);
       this.add.circle(x - 38, BAR_Y + 30, 9, spec.colour).setDepth(12);
@@ -130,16 +130,16 @@ export class DefenseScene extends Phaser.Scene {
       this.add.text(x - 22, BAR_Y + 39, `${spec.cost}g`, { fontFamily: MONO, fontSize: '12px', color: COLOURS.dim }).setOrigin(0, 0.5).setDepth(12);
     });
 
-    this.infoText = this.add.text(690, BAR_Y + 30, '', { fontFamily: MONO, fontSize: '12px', color: COLOURS.dim }).setOrigin(0, 0.5).setDepth(11);
+    this.infoText = this.add.text(612, BAR_Y + 30, '', { fontFamily: MONO, fontSize: '12px', color: COLOURS.dim }).setOrigin(0, 0.5).setDepth(11);
 
-    const next = this.add.rectangle(WIDTH - 70, BAR_Y + 30, 120, 44, 0x4cc9f0).setDepth(11).setInteractive({ useHandCursor: true });
+    const next = this.add.rectangle(WIDTH - 62, BAR_Y + 30, 108, 44, 0x4cc9f0).setDepth(11).setInteractive({ useHandCursor: true });
     next.on('pointerdown', () => this.callWave());
-    this.nextText = this.add.text(WIDTH - 70, BAR_Y + 30, '', { fontFamily: SANS, fontSize: '14px', color: '#0b0d12', align: 'center' }).setOrigin(0.5).setDepth(12);
+    this.nextText = this.add.text(WIDTH - 62, BAR_Y + 30, '', { fontFamily: SANS, fontSize: '14px', color: '#0b0d12', align: 'center' }).setOrigin(0.5).setDepth(12);
     this.paintHud();
   }
 
   private paintHud(): void {
-    this.goldText.setText(`${this.gold}g`);
+    this.goldText.setText(`${Math.min(this.gold, 99999)}g`);
     this.livesText.setText(`♥ ${this.lives}`);
     this.waveText.setText(`wave ${this.wave}/${F.FINAL_WAVE}\nscore ${this.score}`);
     this.buttons.forEach((b, i) => {

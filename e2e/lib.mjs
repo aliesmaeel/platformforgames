@@ -14,14 +14,22 @@ export async function launch() {
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome',
     headless: true,
-    args: ['--no-sandbox', '--disable-webgl', '--window-size=1280,900']
+    args: [
+      '--no-sandbox',
+      '--window-size=1280,900',
+      // PFG_WEBGL=1 renders through SwiftShader for visual checks; default disables WebGL for determinism.
+      ...(process.env.PFG_WEBGL ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--disable-webgl'])
+    ]
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900 });
   const errors = [];
   page.on('console', (m) => {
-    if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('GL Driver Message')) {
-      errors.push(`[${m.type()}] ${m.text()}`);
+    const text = m.text();
+    // Expected noise: SwiftShader perf warnings, and Three reporting the WebGL context we disabled on purpose.
+    const expected = text.includes('GL Driver Message') || (!process.env.PFG_WEBGL && text.includes('THREE.WebGLRenderer') && /WebGL context/.test(text));
+    if ((m.type() === 'error' || m.type() === 'warning') && !expected) {
+      errors.push(`[${m.type()}] ${text}`);
     }
   });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
